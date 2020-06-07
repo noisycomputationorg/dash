@@ -12,7 +12,7 @@ def read_req_file(req_type):
 
 
 setup(
-    name="dash",
+    name="dash-noisycomputation",
     version=main_ns["__version__"],
     author="Chris Parmer",
     author_email="chris@plotly.com",
@@ -22,6 +22,7 @@ setup(
     description=(
         "A Python framework for building reactive web-apps. "
         "Developed by Plotly."
+        "NoisyComputation fork."
     ),
     long_description=io.open("README.md", encoding="utf-8").read(),
     long_description_content_type="text/markdown",
@@ -39,7 +40,7 @@ setup(
         ],
         "pytest11": ["dash = dash.testing.plugin"],
     },
-    url="https://plotly.com/dash",
+    url="https://github.com/noisycomputation/dash",
     classifiers=[
         "Development Status :: 5 - Production/Stable",
         "Environment :: Web Environment",

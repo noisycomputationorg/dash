@@ -5,7 +5,7 @@ with open("package.json") as fp:
     package = json.load(fp)
 
 setup(
-    name="dash_renderer",
+    name="dash_renderer-noisycomputation",
     version=package["version"],
     author="Chris Parmer",
     author_email="chris@plotly.com",
