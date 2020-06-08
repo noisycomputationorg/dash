@@ -15,16 +15,14 @@ commands:
   requires_install_remove_dash_cmd:
     steps:
       - run:
-        name: remove dash from requires-install.txt
-        command: |
-            sed -i 's/^dash/#dash/' requires-install.txt
+          name: remove dash from requires-install.txt
+          command: sed -i 's/^dash/#dash/' requires-install.txt
 
   requires_install_restore_dash_cmd:
     steps:
       - run:
-        name: remove dash from requires-install.txt
-        command: |
-            sed -i 's/^#dash/dash/' requires-install.txt
+          name: remove dash from requires-install.txt
+          command: sed -i 's/^#dash/dash/' requires-install.txt
 
   pip_dev_requirements_cmd:
     steps:
