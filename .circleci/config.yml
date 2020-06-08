@@ -1,10 +1,52 @@
-version: 2
+version: 2.1
+commands:
+  save_cache_cmd:
+    steps:
+      - save_cache:
+          key: dep-{{ checksum ".circleci/config.yml" }}-{{ checksum "ver.txt" }}-{{ checksum "requires-dev.txt" }}-{{ checksum "requires-install.txt" }}-{{ checksum "requires-testing.txt" }}
+          paths:
+              - venv
+
+  restore_cache_cmd:
+    steps:
+      - restore_cache:
+          key: dep-{{ checksum ".circleci/config.yml" }}-{{ checksum "ver.txt" }}-{{ checksum "requires-dev.txt" }}-{{ checksum "requires-install.txt" }}-{{ checksum "requires-testing.txt" }}
+
+  requires_install_remove_dash_cmd:
+    steps:
+      - run:
+        name: remove dash from requires-install.txt
+        command: |
+            sed -i 's/^dash/#dash/' requires-install.txt
+
+  requires_install_restore_dash_cmd:
+    steps:
+      - run:
+        name: remove dash from requires-install.txt
+        command: |
+            sed -i 's/^#dash/dash/' requires-install.txt
+
+  pip_dev_requirements_cmd:
+    steps:
+      - requires_install_remove_dash_cmd
+      - run:
+          name: ️️🏗️ pip dev requirements
+          command: |
+            python -m venv venv && source venv/bin/activate
+            pip install -e . --no-cache-dir -r requires-install.txt -r requires-dev.txt -r requires-testing.txt --progress-bar off
+
+            # dash-renderer needs to be installed in the venv in order to run the `renderer` tool
+            cd dash-renderer && npm ci && pip install -e . --no-cache-dir && cd ..
+      - requires_install_restore_dash_cmd
+
+
 jobs:
   percy-finalize:
     docker:
       - image: percyio/agent
     steps:
       - run: percy finalize --all
+
 
   artifacts:
     docker:
@@ -14,13 +56,13 @@ jobs:
     steps:
       - checkout
       - run: echo $PYVERSION > ver.txt
-      - restore_cache:
-          key: dep-{{ checksum ".circleci/config.yml" }}-{{ checksum "ver.txt" }}-{{ checksum "requires-dev.txt" }}-{{ checksum "requires-install.txt" }}-{{ checksum "requires-testing.txt" }}
+      - restore_cache_cmd
       - attach_workspace:
           at: ~/dash
       - store_artifacts:
           path: ~/dash/packages
           destination: /tmp/packages
+
 
   lint-unit-37: &lint-unit
     working_directory: ~/dash
@@ -28,51 +70,28 @@ jobs:
       - image: circleci/python:3.7-stretch-node-browsers
         environment:
           PYVERSION: python37
-
     steps:
       - checkout
       - run: echo $PYVERSION > ver.txt
-      - restore_cache:
-          key: dep-{{ checksum ".circleci/config.yml" }}-{{ checksum "ver.txt" }}-{{ checksum "requires-dev.txt" }}-{{ checksum "requires-install.txt" }}-{{ checksum "requires-testing.txt" }}
-      - run:
-          name: ️️🏗️ pip dev requirements
-          command: |
-            sudo pip install --upgrade virtualenv --progress-bar off
-            python -m venv venv || virtualenv venv && . venv/bin/activate
-            pip install -e . --no-cache-dir -r <(sed '/dash/d' requires-install.txt) -r requires-dev.txt -r requires-testing.txt --progress-bar off
-      - save_cache:
-          key: dep-{{ checksum ".circleci/config.yml" }}-{{ checksum "ver.txt" }}-{{ checksum "requires-dev.txt" }}-{{ checksum "requires-install.txt" }}-{{ checksum "requires-testing.txt" }}
-          paths:
-              - venv
+      - restore_cache_cmd
+      - pip_dev_requirements_cmd
+      - save_cache_cmd
+      - requires_install_remove_dash_cmd
       - run:
           name: 🌸 Python & JS Lint
           command: |
-            . venv/bin/activate
+            source venv/bin/activate
             set -eo pipefail
             pip install -e . --progress-bar off && pip list | grep dash
             npm install --production && npm run initialize
-            npm run lint
+            npm run lint --force
       - run:
           name: 🐍 Python Unit Tests & ☕ JS Unit Tests
           command: |
-            . venv/bin/activate
+            source venv/bin/activate
             npm run test.unit
+      - requires_install_restore_dash_cmd
 
-  lint-unit-36:
-      <<: *lint-unit
-      docker:
-        - image: circleci/python:3.6-stretch-node-browsers
-          environment:
-            PYLINTRC: .pylintrc
-            PYVERSION: python36
-
-  lint-unit-27:
-      <<: *lint-unit
-      docker:
-        - image: circleci/python:2.7-stretch-node-browsers
-          environment:
-            PYLINTRC: .pylintrc
-            PYVERSION: python27
 
   build-core-37: &build-core
     working_directory: ~/dash
@@ -84,44 +103,29 @@ jobs:
     steps:
       - checkout
       - run: echo $PYVERSION > ver.txt
-      - restore_cache:
-          key: dep-{{ checksum ".circleci/config.yml" }}-{{ checksum "ver.txt" }}-{{ checksum "requires-dev.txt" }}-{{ checksum "requires-install.txt" }}-{{ checksum "requires-testing.txt" }}
-      - run:
-          name: ️️🏗️ pip dev requirements
-          command: |
-            sudo pip install --upgrade virtualenv
-            python -m venv venv || virtualenv venv && . venv/bin/activate
-            pip install -e . --no-cache-dir -r <(sed '/dash/d' requires-install.txt) -r requires-dev.txt -r requires-testing.txt --progress-bar off
-      - save_cache:
-          key: dep-{{ checksum ".circleci/config.yml" }}-{{ checksum "ver.txt" }}-{{ checksum "requires-dev.txt" }}-{{ checksum "requires-install.txt" }}-{{ checksum "requires-testing.txt" }}
-          paths:
-              - venv
+      - restore_cache_cmd
+      - pip_dev_requirements_cmd
+      - save_cache_cmd
+      - requires_install_remove_dash_cmd
       - run:
           name: ️️🏗️ build core
           command: |
-              . venv/bin/activate && pip install --no-cache-dir --upgrade -e . --progress-bar off && mkdir packages
+              source venv/bin/activate && pip install --no-cache-dir --upgrade -e . --progress-bar off && mkdir packages
               cd dash-renderer && renderer build && python setup.py sdist && mv dist/* ../packages/ && cd ..
               git clone --depth 1 https://github.com/noisycomputation/dash-core-components.git
               cd dash-core-components && npm ci && npm run build && python setup.py sdist && mv dist/* ../packages/  && cd ..
+              ls -la packages
+      - requires_install_restore_dash_cmd
+      - run:
+          name: build dash
+          command: |
+              python setup.py sdist && mv dist/* packages/
               ls -la packages
       - persist_to_workspace:
           root: ~/dash
           paths:
             - packages/*.tar.gz
 
-  build-core-36:
-      <<: *build-core
-      docker:
-        - image: circleci/python:3.6-stretch-node-browsers
-          environment:
-            PYVERSION: python36
-
-  build-core-27:
-      <<: *build-core
-      docker:
-        - image: circleci/python:2.7-stretch-node-browsers
-          environment:
-            PYVERSION: python27
 
   build-misc-37: &build-misc
     working_directory: ~/dash
@@ -129,49 +133,28 @@ jobs:
       - image: circleci/python:3.7-stretch-node-browsers
         environment:
           PYVERSION: python37
-
     steps:
       - checkout
       - run: echo $PYVERSION > ver.txt
-      - restore_cache:
-          key: dep-{{ checksum ".circleci/config.yml" }}-{{ checksum "ver.txt" }}-{{ checksum "requires-dev.txt" }}-{{ checksum "requires-install.txt" }}-{{ checksum "requires-testing.txt" }}
-      - run:
-          name: ️️🏗️ pip dev requirements
-          command: |
-            sudo pip install --upgrade virtualenv --quiet
-            python -m venv venv || virtualenv venv && . venv/bin/activate
-            pip install -e . --no-cache-dir -r <(sed '/dash/d' requires-install.txt) -r requires-dev.txt -r requires-testing.txt --progress-bar off
-      - save_cache:
-          key: dep-{{ checksum ".circleci/config.yml" }}-{{ checksum "ver.txt" }}-{{ checksum "requires-dev.txt" }}-{{ checksum "requires-install.txt" }}-{{ checksum "requires-testing.txt" }}
-          paths:
-              - venv
+      - restore_cache_cmd
+      - pip_dev_requirements_cmd
+      - save_cache_cmd
+      - requires_install_remove_dash_cmd
       - run:
           name: ️️🏗️ build misc
           command: |
-              . venv/bin/activate && pip install --no-cache-dir --upgrade -e . --progress-bar off && mkdir packages
+              source venv/bin/activate && pip install --no-cache-dir --upgrade -e . --progress-bar off && mkdir packages
               git clone --depth 1 https://github.com/noisycomputation/dash-table.git
               cd dash-table && npm ci && npm run build && python setup.py sdist && mv dist/* ../packages/ && cd ..
               git clone --depth 1 https://github.com/noisycomputation/dash-html-components.git
               cd dash-html-components && npm ci && npm run build && python setup.py sdist && mv dist/* ../packages/ && cd ..
               ls -la packages
+      - requires_install_restore_dash_cmd
       - persist_to_workspace:
           root: ~/dash
           paths:
             - packages/*.tar.gz
 
-  build-misc-36:
-      <<: *build-misc
-      docker:
-        - image: circleci/python:3.6-stretch-node-browsers
-          environment:
-            PYVERSION: python36
-
-  build-misc-27:
-      <<: *build-misc
-      docker:
-        - image: circleci/python:2.7-stretch-node-browsers
-          environment:
-            PYVERSION: python27
 
   test-37: &test
     working_directory: ~/dash
@@ -185,8 +168,7 @@ jobs:
     steps:
       - checkout
       - run: echo $PYVERSION > ver.txt
-      - restore_cache:
-          key: dep-{{ checksum ".circleci/config.yml" }}-{{ checksum "ver.txt" }}-{{ checksum "requires-dev.txt" }}-{{ checksum "requires-install.txt" }}-{{ checksum "requires-testing.txt" }}
+      - restore_cache_cmd
       - attach_workspace:
           at: ~/dash
       - run:
@@ -196,8 +178,7 @@ jobs:
             npm install --production
             cd packages && ls -la
             find . -name "*.gz" | xargs pip install --no-cache-dir --ignore-installed && cd ..
-            sed -i '/dash/d' requires-install.txt
-            pip install --no-cache-dir --ignore-installed .
+            pip install --no-cache-dir .
             pip list | grep dash
       - run:
           name: 🧪 Run Integration Tests
@@ -215,21 +196,6 @@ jobs:
           command: npx percy finalize --all
           when: on_fail
 
-  test-36:
-      <<: *test
-      docker:
-        - image: circleci/python:3.6-stretch-node-browsers
-          environment:
-            PERCY_ENABLE: 0
-            PYVERSION: python36
-
-  test-27:
-      <<: *test
-      docker:
-        - image: circleci/python:2.7-stretch-node-browsers
-          environment:
-            PERCY_ENABLE: 0
-            PYVERSION: python27
 
 workflows:
   version: 2
@@ -251,26 +217,4 @@ workflows:
           filters:
             branches:
               only:
-                - master
-                - dev
-            tags:
-              only: /v*/
-
-  python3.6:
-    jobs:
-      - lint-unit-36
-      - build-core-36
-      - build-misc-36
-      - test-36:
-          requires:
-            - build-core-36
-            - build-misc-36
-  python2.7:
-    jobs:
-      - lint-unit-27
-      - build-core-27
-      - build-misc-27
-      - test-27:
-          requires:
-            - build-core-27
-            - build-misc-27
+                - noisy
