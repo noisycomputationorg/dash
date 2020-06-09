@@ -37,6 +37,19 @@ commands:
             cd dash-renderer && npm ci && pip install -e . --no-cache-dir && cd ..
       - requires_install_restore_dash_cmd
 
+  install_built_packages_cmd:
+    steps:
+      - run:
+          name: ️️🏗️  Install built packages
+          command: |
+            rm -rf venv && python -m venv venv && source venv/bin/activate
+            npm install --production
+            cd packages && ls -la
+            find . -type f \( -name "dash*.gz" ! -name "dash?noisycomputation*.gz" \) | xargs pip install --no-cache-dir --ignore-installed
+            find . -name "dash*.gz" | xargs pip install --no-cache-dir && cd ..
+            pip install --no-cache-dir -r requires-install.txt -r requires-dev.txt -r requires-testing.txt
+            pip list | grep dash
+
 
 jobs:
   percy-finalize:
@@ -60,35 +73,6 @@ jobs:
       - store_artifacts:
           path: ~/dash/packages
           destination: /tmp/packages
-
-
-  lint-unit-37: &lint-unit
-    working_directory: ~/dash
-    docker:
-      - image: circleci/python:3.7-stretch-node-browsers
-        environment:
-          PYVERSION: python37
-    steps:
-      - checkout
-      - run: echo $PYVERSION > ver.txt
-      - restore_cache_cmd
-      - pip_dev_requirements_cmd
-      - save_cache_cmd
-      - requires_install_remove_dash_cmd
-      - run:
-          name: 🌸 Python & JS Lint
-          command: |
-            source venv/bin/activate
-            set -eo pipefail
-            pip install -e . --progress-bar off && pip list | grep dash
-            npm install --production && npm run initialize
-            npm run lint --force
-      - run:
-          name: 🐍 Python Unit Tests & ☕ JS Unit Tests
-          command: |
-            source venv/bin/activate
-            npm run test.unit
-      - requires_install_restore_dash_cmd
 
 
   build-core-37: &build-core
@@ -156,6 +140,35 @@ jobs:
             - packages/*.tar.gz
 
 
+  lint-unit-37: &lint-unit
+    working_directory: ~/dash
+    docker:
+      - image: circleci/python:3.7-stretch-node-browsers
+        environment:
+          PYVERSION: python37
+    steps:
+      - checkout
+      - run: echo $PYVERSION > ver.txt
+      - restore_cache_cmd
+      - pip_dev_requirements_cmd
+      - save_cache_cmd
+      - install_built_packages_cmd
+      - run:
+          name: 🌸 Python & JS Lint
+          command: |
+            source venv/bin/activate
+            set -eo pipefail
+            pip list | grep dash
+            npm install --production && npm run initialize
+            npm run lint --force
+      - run:
+          name: 🐍 Python Unit Tests & ☕ JS Unit Tests
+          command: |
+            source venv/bin/activate
+            npm run test.unit
+      - requires_install_restore_dash_cmd
+
+
   test-37: &test
     working_directory: ~/dash
     docker:
@@ -164,23 +177,14 @@ jobs:
           PERCY_PARALLEL_TOTAL: -1
           PUPPETEER_SKIP_CHROMIUM_DOWNLOAD: True
           PYVERSION: python37
-    parallelism: 3
+    #parallelism: 3
     steps:
       - checkout
       - run: echo $PYVERSION > ver.txt
       - restore_cache_cmd
       - attach_workspace:
           at: ~/dash
-      - run:
-          name: ️️🏗️  Install packages
-          command: |
-            source venv/bin/activate
-            npm install --production
-            cd packages && ls -la
-            find . -type f \( -name "dash*.gz" ! -name "dash?noisycomputation*.gz" \) | xargs pip install --no-cache-dir --ignore-installed
-            find . -name "dash*.gz" | xargs pip install --no-cache-dir && cd ..
-            pip install --no-cache-dir -r requires-install.txt -r requires-dev.txt -r requires-testing.txt
-            pip list | grep dash
+      - install_built_packages_cmd
       - run:
           name: 🧪 Run Integration Tests
           command: |
@@ -203,18 +207,38 @@ workflows:
   python3.7:
     jobs:
       - build-core-37
+          filters:
+            branches:
+              only:
+                - noisy
       - build-misc-37
+          filters:
+            branches:
+              only:
+                - noisy
       - lint-unit-37:
           requires:
             - build-core-37
             - build-misc-37
+          filters:
+            branches:
+              only:
+                - noisy
       - test-37:
           requires:
             - build-core-37
             - build-misc-37
+          filters:
+            branches:
+              only:
+                - noisy
       - percy-finalize:
           requires:
             - test-37
+          filters:
+            branches:
+              only:
+                - noisy
       - artifacts:
           requires:
             - percy-finalize
