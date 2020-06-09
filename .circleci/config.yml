@@ -175,9 +175,9 @@ jobs:
             source venv/bin/activate
             npm install --production
             cd packages && ls -la
-            find . -name "dash_*.gz" | grep -v "^dash.noisycomputation" | xargs pip install --no-cache-dir --ignore-installed
-            find . -name "dash?noisycomputation*" | xargs pip install --no-cache-dir --ignore-installed && cd ..
-            pip install --no-cache-dir .
+            find . -type f \( -name "dash*.gz" ! -name "dash?noisycomputation*.gz" \) | xargs pip install --no-cache-dir --ignore-installed
+            find . -name "dash*.gz" | xargs pip install --no-cache-dir && cd ..
+            pip install --no-cache-dir -r requires-install.txt -r requires-dev.txt -r requires-testing.txt
             pip list | grep dash
       - run:
           name: 🧪 Run Integration Tests
