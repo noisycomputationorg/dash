@@ -206,12 +206,12 @@ workflows:
   version: 2
   python3.7:
     jobs:
-      - build-core-37
+      - build-core-37:
           filters:
             branches:
               only:
                 - noisy
-      - build-misc-37
+      - build-misc-37:
           filters:
             branches:
               only:
