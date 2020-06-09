@@ -16,7 +16,7 @@ setup(
     include_package_data=True,
     license=package["license"],
     description=package.get("description", package_name),
-    long_description=io.open('README.md', encoding='utf-8').read(),
+    long_description=io.open('../README.md', encoding='utf-8').read(),
     long_description_content_type='text/markdown',
     install_requires=[],
 )
