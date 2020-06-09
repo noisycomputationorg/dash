@@ -1,5 +1,4 @@
 from setuptools import setup
-import io
 import json
 
 with open("package.json") as f:
@@ -12,11 +11,11 @@ setup(
     version=package["version"],
     author=package["author"],
     packages=[package_name.replace("_noisycomputation", "")],
-    url='https://github.com/noisycomputation/dash-renderer',
+    url='https://github.com/noisycomputation/dash',
     include_package_data=True,
     license=package["license"],
     description=package.get("description", package_name),
-    long_description=io.open('../README.md', encoding='utf-8').read(),
+    long_description=f"See <{url}>",
     long_description_content_type='text/markdown',
     install_requires=[],
 )
