@@ -176,7 +176,7 @@ jobs:
             npm install --production
             cd packages && ls -la
             find . -name "dash_*.gz" | grep -v "^dash.noisycomputation" | xargs pip install --no-cache-dir --ignore-installed
-            find . -name "dash?noisycomputation" | xargs pip install --no-cache-dir --ignore-installed && cd ..
+            find . -name "dash?noisycomputation*" | xargs pip install --no-cache-dir --ignore-installed && cd ..
             pip install --no-cache-dir .
             pip list | grep dash
       - run:
