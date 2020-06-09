@@ -112,6 +112,8 @@ jobs:
               cd dash-renderer && renderer build && python setup.py sdist && mv dist/* ../packages/ && cd ..
               git clone --depth 1 https://github.com/noisycomputation/dash-core-components.git
               cd dash-core-components && npm ci && npm run build && python setup.py sdist && mv dist/* ../packages/  && cd ..
+              git clone --depth 1 https://github.com/plotly/dash-renderer-test-components
+              cd dash-renderer-test-components && npm ci && npm run build:all && python setup.py sdist && mv dist/* ../packages/ && cd ..
               ls -la packages
       - requires_install_restore_dash_cmd
       - run:
@@ -200,9 +202,12 @@ workflows:
   version: 2
   python3.7:
     jobs:
-      - lint-unit-37
       - build-core-37
       - build-misc-37
+      - lint-unit-37:
+          requires:
+            - build-core-37
+            - build-misc-37
       - test-37:
           requires:
             - build-core-37
