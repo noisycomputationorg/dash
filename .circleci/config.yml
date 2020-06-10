@@ -34,7 +34,7 @@ commands:
             pip install -e . --no-cache-dir -r requires-install.txt -r requires-dev.txt -r requires-testing.txt --progress-bar off
 
             # dash-renderer needs to be installed in the venv in order to run the `renderer` tool
-            cd dash-renderer && npm ci && pip install -e . --no-cache-dir && cd ..
+            cd dash-renderer && npm ci && pip install -e . --no-cache-dir --progress-bar off && cd ..
       - requires_install_restore_dash_cmd
 
   install_built_packages_cmd:
@@ -45,9 +45,9 @@ commands:
             rm -rf venv && python -m venv venv && source venv/bin/activate
             npm install --production
             cd packages && ls -la
-            find . -type f \( -name "dash*.gz" ! -name "dash?noisycomputation*.gz" \) | xargs pip install --no-cache-dir --ignore-installed
-            find . -name "dash*.gz" | xargs pip install --no-cache-dir && cd ..
-            pip install --no-cache-dir -r requires-install.txt -r requires-dev.txt -r requires-testing.txt
+            find . -type f \( -name "dash*.gz" ! -name "dash?noisycomputation*.gz" \) | xargs pip install --no-cache-dir --ignore-installed --progress-bar off
+            find . -name "dash*.gz" | xargs pip install --no-cache-dir --progress-bar off && cd ..
+            pip install --no-cache-dir -r requires-install.txt -r requires-dev.txt -r requires-testing.txt --progress-bar off
             pip list | grep dash
 
 
@@ -67,6 +67,7 @@ jobs:
     steps:
       - checkout
       - run: echo $PYVERSION > ver.txt
+      - run: tar zcvf ~/dash/packages/dash-packages.tar.gz ~/dash/packages/*tar.gz
       - attach_workspace:
           at: ~/dash
       - store_artifacts:
@@ -221,7 +222,6 @@ workflows:
                 - noisy
       - lint-unit-37:
           requires:
-            - build-core-37
             - build-misc-37
           filters:
             branches:
@@ -229,7 +229,6 @@ workflows:
                 - noisy
       - test-37:
           requires:
-            - build-core-37
             - build-misc-37
           filters:
             branches:
