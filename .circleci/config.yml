@@ -152,7 +152,7 @@ jobs:
     steps:
       - checkout
       - run: echo $PYVERSION > ver.txt
-      - attach workspace:
+      - attach_workspace:
           at: ~/dash
       - install_built_packages_cmd
       - run:
