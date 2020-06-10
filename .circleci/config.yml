@@ -24,11 +24,11 @@ commands:
           name: restore dash to requires-install.txt
           command: sed -i 's/^#dash/dash/' requires-install.txt
 
-  pip_dev_requirements_cmd:
+  build_core_dev_requirements_cmd:
     steps:
       - requires_install_remove_dash_cmd
       - run:
-          name: ️️🏗️ pip dev requirements
+          name: ️️🏗️ build core dev requirements
           command: |
             python -m venv venv && source venv/bin/activate
             pip install -e . --no-cache-dir -r requires-install.txt -r requires-dev.txt -r requires-testing.txt --progress-bar off
@@ -67,7 +67,6 @@ jobs:
     steps:
       - checkout
       - run: echo $PYVERSION > ver.txt
-      - restore_cache_cmd
       - attach_workspace:
           at: ~/dash
       - store_artifacts:
@@ -86,25 +85,22 @@ jobs:
       - checkout
       - run: echo $PYVERSION > ver.txt
       - restore_cache_cmd
-      - pip_dev_requirements_cmd
-      - save_cache_cmd
+      - build_core_dev_requirements_cmd
       - requires_install_remove_dash_cmd
       - run:
-          name: ️️🏗️ build core
+          name: ️️🏗️ build core dash-renderer
           command: |
               source venv/bin/activate && pip install --no-cache-dir --upgrade -e . --progress-bar off && mkdir packages
               cd dash-renderer && renderer build && python setup.py sdist && mv dist/* ../packages/ && cd ..
-              git clone --depth 1 https://github.com/noisycomputation/dash-core-components.git
-              cd dash-core-components && npm ci && npm run build && python setup.py sdist && mv dist/* ../packages/  && cd ..
-              git clone --depth 1 https://github.com/plotly/dash-renderer-test-components
-              cd dash-renderer-test-components && npm ci && npm run build:all && python setup.py sdist && mv dist/* ../packages/ && cd ..
               ls -la packages
       - requires_install_restore_dash_cmd
       - run:
-          name: build dash
+          name: ️️🏗️ build core dash
           command: |
+              source venv/bin/activate
               python setup.py sdist && mv dist/* packages/
               ls -la packages
+      - save_cache_cmd
       - persist_to_workspace:
           root: ~/dash
           paths:
@@ -121,17 +117,24 @@ jobs:
       - checkout
       - run: echo $PYVERSION > ver.txt
       - restore_cache_cmd
-      - pip_dev_requirements_cmd
-      - save_cache_cmd
       - requires_install_remove_dash_cmd
       - run:
           name: ️️🏗️ build misc
           command: |
               source venv/bin/activate && pip install --no-cache-dir --upgrade -e . --progress-bar off && mkdir packages
+
+              git clone --depth 1 https://github.com/noisycomputation/dash-core-components.git
+              cd dash-core-components && npm ci && npm run build && python setup.py sdist && mv dist/* ../packages/  && cd ..
+
+              git clone --depth 1 https://github.com/plotly/dash-renderer-test-components
+              cd dash-renderer-test-components && npm ci && npm run build:all && python setup.py sdist && mv dist/* ../packages/ && cd ..
+
               git clone --depth 1 https://github.com/noisycomputation/dash-table.git
               cd dash-table && npm ci && npm run build && python setup.py sdist && mv dist/* ../packages/ && cd ..
+
               git clone --depth 1 https://github.com/noisycomputation/dash-html-components.git
               cd dash-html-components && npm ci && npm run build && python setup.py sdist && mv dist/* ../packages/ && cd ..
+
               ls -la packages
       - requires_install_restore_dash_cmd
       - persist_to_workspace:
@@ -149,9 +152,8 @@ jobs:
     steps:
       - checkout
       - run: echo $PYVERSION > ver.txt
-      - restore_cache_cmd
-      - pip_dev_requirements_cmd
-      - save_cache_cmd
+      - attach workspace:
+          at: ~/dash
       - install_built_packages_cmd
       - run:
           name: 🌸 Python & JS Lint
@@ -166,7 +168,6 @@ jobs:
           command: |
             source venv/bin/activate
             npm run test.unit
-      - requires_install_restore_dash_cmd
 
 
   test-37: &test
@@ -181,14 +182,14 @@ jobs:
     steps:
       - checkout
       - run: echo $PYVERSION > ver.txt
-      - restore_cache_cmd
       - attach_workspace:
           at: ~/dash
       - install_built_packages_cmd
       - run:
           name: 🧪 Run Integration Tests
           command: |
-            . venv/bin/activate
+            source venv/bin/activate
+            set -eo pipefail
             npm run test.integration
       - store_artifacts:
           path: test-reports
@@ -212,6 +213,8 @@ workflows:
               only:
                 - noisy
       - build-misc-37:
+          requires:
+            - build-core-37
           filters:
             branches:
               only:
@@ -241,7 +244,8 @@ workflows:
                 - noisy
       - artifacts:
           requires:
-            - percy-finalize
+            #- percy-finalize
+            - build-misc-37
           filters:
             branches:
               only:
