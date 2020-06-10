@@ -67,9 +67,9 @@ jobs:
     steps:
       - checkout
       - run: echo $PYVERSION > ver.txt
-      - run: tar zcvf ~/dash/packages/dash-packages.tar.gz ~/dash/packages/*tar.gz
       - attach_workspace:
           at: ~/dash
+      - run: tar zcvf ~/dash/packages/dash-packages.tar.gz ~/dash/packages/*tar.gz
       - store_artifacts:
           path: ~/dash/packages
           destination: /tmp/packages
