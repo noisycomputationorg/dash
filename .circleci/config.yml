@@ -179,7 +179,7 @@ jobs:
           PERCY_PARALLEL_TOTAL: -1
           PUPPETEER_SKIP_CHROMIUM_DOWNLOAD: True
           PYVERSION: python37
-    #parallelism: 3
+    parallelism: 3
     steps:
       - checkout
       - run: echo $PYVERSION > ver.txt
@@ -217,14 +217,17 @@ jobs:
       - run:
           name: Upload built packages to noisycomputation repo
           command: |
-            git config user.email "noisycomputation@gmail.com"
-            git config user.name "noisycomputation"
             export REPO_URL="github.com/noisycomputation/noisycomputation.github.io.git"
-            git clone --depth 1 https://${REPO_URL}
+            git clone https://${REPO_URL}
+
             python -m venv venv && source venv/bin/venv
             pip install -U pip pkginfo
+
             cd noisycomputation.github.io
             python update_repo.py ~/dash/packages
+
+            git config user.email "noisycomputation@gmail.com"
+            git config user.name "noisycomputation"
             git add . && git commit -m "Repo update from dash CircleCI build"
 
             # redirect all output to null, else an error or update to git binary could
