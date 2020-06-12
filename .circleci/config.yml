@@ -220,7 +220,7 @@ jobs:
             export REPO_URL="github.com/noisycomputation/noisycomputation.github.io.git"
             git clone https://${REPO_URL}
 
-            python -m venv venv && source venv/bin/venv
+            python -m venv venv && source venv/bin/activate
             pip install -U pip pkginfo
 
             cd noisycomputation.github.io
