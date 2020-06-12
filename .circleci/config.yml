@@ -69,7 +69,7 @@ jobs:
       - run: echo $PYVERSION > ver.txt
       - attach_workspace:
           at: ~/dash
-      - run: tar zcvf ~/dash/packages/dash-packages.tar.gz ~/dash/packages/*tar.gz
+      - run: cd ~/dash/packages && tar cvf dash-packages.tar *tar.gz && cd ~
       - store_artifacts:
           path: ~/dash/packages
           destination: /tmp/packages
@@ -204,6 +204,42 @@ jobs:
           when: on_fail
 
 
+  upload-37:
+    working_directory: ~
+    docker:
+      - image: circleci/python:3.7-stretch-node-browsers
+        environment:
+          PYVERSION: python37
+    steps:
+      - run: echo $PYVERSION > ver.txt
+      - attach_workspace:
+          at: ~/dash
+      - run:
+          name: Upload built packages to noisycomputation repo
+          command: |
+            git config user.email "noisycomputation@gmail.com"
+            git config user.name "noisycomputation"
+            export REPO_URL="github.com/noisycomputation/noisycomputation.github.io.git"
+            git clone --depth 1 https://${REPO_URL}
+            python -m venv venv && source venv/bin/venv
+            pip install -U pip pkginfo
+            cd noisycomputation.github.io
+            python update_repo.py ~/dash/packages
+            git add . && git commit -m "Repo update from dash CircleCI build"
+
+            # redirect all output to null, else an error or update to git binary could
+            # expose token in public circleci logs.
+            git push -q https://${GITHUB_TOKEN}@${REPO_URL} master > /dev/null 2>&1
+
+            # but check whether git push suceeded or not
+            if [ $? -ne 0 ]; then
+                echo "git push FAILED"
+                exit 1
+            else
+                echo "git push SUCCEEDED"
+            fi
+
+
 workflows:
   version: 2
   python3.7:
@@ -245,6 +281,13 @@ workflows:
           requires:
             #- percy-finalize
             - build-misc-37
+          filters:
+            branches:
+              only:
+                - noisy
+      - upload-37:
+          requires:
+            - lint-unit-37
           filters:
             branches:
               only:

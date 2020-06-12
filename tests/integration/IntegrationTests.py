@@ -31,7 +31,7 @@ class IntegrationTests(unittest.TestCase):
         options.add_argument("--no-sandbox")
 
         capabilities = DesiredCapabilities.CHROME
-        capabilities["loggingPrefs"] = {"browser": "SEVERE"}
+        capabilities["goog:loggingPrefs"] = {"browser": "ALL"}
 
         if "DASH_TEST_CHROMEPATH" in os.environ:
             options.binary_location = os.environ["DASH_TEST_CHROMEPATH"]
@@ -121,7 +121,7 @@ class IntegrationTests(unittest.TestCase):
         entries = self.driver.get_log("browser")
         return [entry for entry in entries if entry["timestamp"] > self.last_timestamp]
 
-    def wait_until_get_log(self, timeout=10):
+    def wait_until_get_log(self, timeout=20):
 
         logs = None
         cnt, poll = 0, 0.1
