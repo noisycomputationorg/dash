@@ -231,7 +231,7 @@ jobs:
             git config user.name "noisycomputation"
             commit_title="Repo update from dash CircleCI build no. << pipeline.number >>"
             commit_desc="This job available at ${CIRCLE_BUILD_URL}"
-            git add . && git commit -m ${commit_title} -m ${commit_desc}
+            git add . && git commit -m "${commit_title}" -m "${commit_desc}"
 
             # redirect all output to null, else an error or update to git binary could
             # expose token in public circleci logs.
