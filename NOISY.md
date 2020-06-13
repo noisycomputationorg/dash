@@ -2,39 +2,53 @@
 
 ## Motivation
 
-The upstream dash-renderer had a small regression introduced in v1.11 and fixed
-in v1.12 where the initial page load would not allow outputs to be actually written
-to on page load. But v1.12 has broken fixed_rows in dash-table, so a custom
-build was required.
+The only correct way to build the entire dash stack is via the
+dash project's circleci build, but that config pulls dash components
+from github indiscriminately, making builds of earlier builds impossible
+without some fragile config hackery.
+
+Instead, the dash, dash-table, dash-html-components, and dash-core-components
+projects have been forked by noisycomputation. The default `noisy` branch of
+all the projects points to currently supported mutually-compatible versions
+of theproject, and the dash project's circleci config has been modified
+to pull in the forks, build them, and publish the resulting packages on
+the publicly available python repository <https://noisycomputation.github.io>.
+The convention for these forks is to increment the version number from upstream
+in the smallest possible way that will be unique.
+
+Projects wishing to use the forked noisycomputation packages need to list the
+<https://noisycomputation.github.io>  repository as an extra install URL in
+the `pip` vernacular and to pin the dependency to the exact version used by
+noisycomputation.
+
+> Care must be taken to list these dependencies *before* any
+> other dependencies that might pull the upstream packages. For example, the
+> package `dash-bootstrap-components` lists `dash>=1.9.0` as a dependency.
+> If the noisycomputation version of `dash` is listed first, it will be
+> installed from the noisycomputation repo and will satisfy the
+> `dash-bootstrap-components` dependency.
 
 ## Build Instructions
 
-First, set up the environment correctly.
+Only builds on CircleCI using `.circleci/config.yml` are officially supported.
 
-* Create an outer directory, called something like dash-env, and move
-  the cloned dash-table directory into it.
-* In the outer directory, create a python + node virtualenv:
-    
-    ```
-    python -m venv venv
-    source venv/bin/activate
-    pip install -U pip; pip install nodeenv
-    nodeenv -p
-    ```
+To make development easier, the circleci environment can be configured locally.
+First, fetch the correct CircleCI image (described above in *Fixing Javascript
+Dependencies*).
 
-Make sure you have the correct branch checked out and build:
+Second, set up a Dockerfile and a build/run script. The script should set up
+a bind mount between the hose machine and the Docker container for two directories,
+one for the local copy of this dash repo, one for shared files. You may need to
+create a user in the Dockerfile and set that user's workdir as the default workdir
+in the script; this is because the uid and gid between your user on the host machine
+must match that on the client machine for you to have the correct permissions on the
+bind-mounted directories (there are other workarounds, like remapping uid and gid, but
+this is rather simpler). If a new user is created, add that user to the container's
+`/etc/sudoers.d/51-{user_name}` so that the user can escalate privileges. Install vim.
 
-* cd dash-renderer (if building only dash-renderer)
-* npm install
-* npm run private::build:js
-* python setup.py sdist
-
-If the javascript build results in errors, often these are caused by incorrect version
-pinning in package.json. @babel/core and @babel/preset-env are frequent culprits, try
-pinning to 7-9-0 and 7-9-5, respectively, and re-run `npm install`.
-
-The output package will be in the `dist` directory. This is ready to be installed with
-pip.
+Third, run the container and execute the build, following the CircleCI steps. The
+easiest way to do this is to use vim to yank/paste the needed lines into a document
+that can be dot-executed from within the container.
 
 ## Changes to Upstream
 
@@ -55,10 +69,14 @@ concern for the integrity of this repo:
     git reset --hard {commit ID}
     git push origin --force
 
-#### Changelog
+#### Changelog (individual version motivations)
 
 
-* v1.11
+* v1.11.0.post13
+   The upstream dash-renderer had a small regression introduced in v1.11 and fixed
+   in v1.12 where the initial page load would not allow outputs to be actually written
+   to on page load. But v1.12 has broken fixed_rows in dash-table, so a custom
+   build was required.
 
    Fix bug that prevents callbacks from updating their outputs on the initial
    firing that happens on page load (see https://github.com/plotly/dash/issues/1223).

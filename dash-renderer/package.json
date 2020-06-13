@@ -1,6 +1,6 @@
 {
-  "name": "dash-renderer-noisycomputation",
-  "version": "1.4.0",
+  "name": "dash-renderer",
+  "version": "1.4.0.post13",
   "description": "render dash components in react",
   "main": "dash_renderer/dash_renderer.min.js",
   "scripts": {

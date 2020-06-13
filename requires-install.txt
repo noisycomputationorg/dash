@@ -1,8 +1,8 @@
 Flask>=1.0.2
 flask-compress
 plotly
-dash_renderer-noisycomputation==1.4.0
-dash-core-components-noisycomputation==1.9.1
-dash-html-components-noisycomputation==1.0.3
-dash-table-noisycomputation==4.6.2
+dash_renderer==1.4.0.post13
+dash-core-components==1.9.1.post13
+dash-html-components==1.0.3.post13
+dash-table==4.6.2.post13
 future

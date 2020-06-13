@@ -45,7 +45,7 @@ commands:
             rm -rf venv && python -m venv venv && source venv/bin/activate
             npm install --production
             cd packages && ls -la
-            find . -type f \( -name "dash*.gz" ! -name "dash?noisycomputation*.gz" \) | xargs pip install --no-cache-dir --ignore-installed --progress-bar off
+            find . -type f \( -name "dash*.gz" ! -name "dash?[0-9]*.gz" \) | xargs pip install --no-cache-dir --ignore-installed --progress-bar off
             find . -name "dash*.gz" | xargs pip install --no-cache-dir --progress-bar off && cd ..
             pip install --no-cache-dir -r requires-install.txt -r requires-dev.txt -r requires-testing.txt --progress-bar off
             pip list | grep dash
@@ -217,6 +217,7 @@ jobs:
       - run:
           name: Upload built packages to noisycomputation repo
           command: |
+            echo "This is pipeline number << pipeline.number >>"
             export REPO_URL="github.com/noisycomputation/noisycomputation.github.io.git"
             git clone https://${REPO_URL}
 
@@ -228,7 +229,9 @@ jobs:
 
             git config user.email "noisycomputation@gmail.com"
             git config user.name "noisycomputation"
-            git add . && git commit -m "Repo update from dash CircleCI build"
+            commit_title="Repo update from dash CircleCI build no. << pipeline.number >>"
+            commit_desc="This job available at ${CIRCLE_BUILD_URL}"
+            git add . && git commit -m ${commit_title} -m ${commit_desc}
 
             # redirect all output to null, else an error or update to git binary could
             # expose token in public circleci logs.

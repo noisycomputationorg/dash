@@ -12,7 +12,7 @@ def read_req_file(req_type):
 
 
 setup(
-    name="dash-noisycomputation",
+    name="dash",
     version=main_ns["__version__"],
     author="Chris Parmer",
     author_email="chris@plotly.com",
