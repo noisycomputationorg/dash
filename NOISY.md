@@ -13,8 +13,18 @@ all the projects points to currently supported mutually-compatible versions
 of theproject, and the dash project's circleci config has been modified
 to pull in the forks, build them, and publish the resulting packages on
 the publicly available python repository <https://noisycomputation.github.io>.
-The convention for these forks is to increment the version number from upstream
-in the smallest possible way that will be unique.
+The convention for these forks is to use the very next patch number from
+the version on which they are based with a `-a1` suffix:
+
+> Example: upstream v1.2.3 becomes v1.2.4-a1.
+
+The suffix specifies a pre-release of the next patch version consistent with both
+Python's [PEP 440](https://www.python.org/dev/peps/pep-0440/#id28) and
+Node's [semver](https://github.com/semver/semver/blob/master/semver.md).
+The next patch's pre-release was chosen to avoid version conflicts with
+upstream, for instance if upstream v1.2.3 were to be forked as v1.2.4,
+upstream's subsequent release of v1.2.4 would conflict with the noisycomputation
+version.
 
 Projects wishing to use the forked noisycomputation packages need to list the
 <https://noisycomputation.github.io>  repository as an extra install URL in
@@ -72,7 +82,7 @@ concern for the integrity of this repo:
 #### Changelog (individual version motivations)
 
 
-* v1.11.0.post13
+* v1.11.1-a1
    The upstream dash-renderer had a small regression introduced in v1.11 and fixed
    in v1.12 where the initial page load would not allow outputs to be actually written
    to on page load. But v1.12 has broken fixed_rows in dash-table, so a custom
