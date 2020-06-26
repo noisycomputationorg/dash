@@ -38,7 +38,7 @@ commands:
       - run:
           name: Install dash and all dependencies in requires*.txt
           command: |
-            source venv/bin/activate || source venv/Scrips/activate
+            source venv/bin/activate || source venv/Scripts/activate
             pip install -e . --no-cache-dir -r requires-install.txt -r requires-dev.txt -r requires-testing.txt --progress-bar off
 
   build_core_dev_requirements_cmd:
@@ -294,8 +294,10 @@ jobs:
       - run: echo $PYVERSION > ver.txt
       - restore_cache_cmd
       - build_core_dev_requirements_cmd
+      - run: echo 'pip list' && pip list
       - requires_install_remove_dash_cmd
       - build_dash_renderer_cmd
+      - run: echo 'pip list' && pip list
       - requires_install_restore_dash_cmd
       - build_dash_cmd
       - persist_to_workspace:
@@ -461,6 +463,7 @@ workflows:
             branches:
               only:
                 - circleci
+                - circleci_win
       - build-misc-37:
           requires:
             - build-core-37
