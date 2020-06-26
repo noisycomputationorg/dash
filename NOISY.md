@@ -1,3 +1,5 @@
+[![noisycomputation](https://circleci.com/gh/noisycomputation/dash/tree/noisy.svg?style=shield)](https://circleci.com/gh/noisycomputation/dash)
+
 # dash Fork
 
 ## Motivation
@@ -64,7 +66,7 @@ that can be dot-executed from within the container.
 
 The workflow is to create a new branch from the release that is to be modified:
 
-    git checkout -b noisy_v1.11 v1.11
+    git checkout -b noisy_v1.11.0 v1.11.1-a1
 
 Make sure to skip lint verification when comitting:
 

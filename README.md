@@ -1,13 +1,10 @@
 # Dash
 
-[![CircleCI](https://img.shields.io/circleci/project/github/plotly/dash/master.svg)](https://circleci.com/gh/plotly/dash)
-[![GitHub](https://img.shields.io/github/license/plotly/dash.svg?color=dark-green)](https://github.com/plotly/dash/blob/master/LICENSE)
-[![PyPI](https://img.shields.io/pypi/v/dash.svg?color=dark-green)](https://pypi.org/project/dash/)
-[![PyPI - Python Version](https://img.shields.io/pypi/pyversions/dash.svg?color=dark-green)](https://pypi.org/project/dash/)
-[![GitHub commit activity](https://img.shields.io/github/commit-activity/y/plotly/dash.svg?color=dark-green)](https://github.com/plotly/dash/graphs/contributors)
+[![noisycomputation](https://circleci.com/gh/noisycomputation/dash/tree/noisy.svg?style=shield)](https://circleci.com/gh/noisycomputation/dash)
+[![GitHub](https://img.shields.io/github/license/noisycomputation/dash.svg?color=dark-green)](https://github.com/noisycomputation/dash/blob/master/LICENSE)
+[![GitHub commit activity](https://img.shields.io/github/commit-activity/y/noisycomputation/dash.svg?color=dark-green)](https://github.com/noisycomputation/dash/graphs/contributors)
 [![LGTM Alerts](https://img.shields.io/lgtm/alerts/g/plotly/dash.svg)](https://lgtm.com/projects/g/plotly/dash/alerts)
 [![LGTM Grade](https://img.shields.io/lgtm/grade/python/g/plotly/dash.svg)](https://lgtm.com/projects/g/plotly/dash/context:python)
-
 
 #### *Dash is a Python framework for building analytical web applications. No JavaScript required*.
 
