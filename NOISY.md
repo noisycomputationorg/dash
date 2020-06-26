@@ -66,7 +66,7 @@ that can be dot-executed from within the container.
 
 The workflow is to create a new branch from the release that is to be modified:
 
-    git checkout -b noisy_v1.11.0 v1.11.1-a1
+    git checkout -b noisy_v1.11.1-a1 v1.11.0
 
 Make sure to skip lint verification when comitting:
 
