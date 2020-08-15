@@ -1,12 +1,71 @@
 version: 2.1
-orbs:
-  win: circleci/windows@2.4.0
+commands:
+  save_cache_cmd:
+    steps:
+      - save_cache:
+          key: dep-{{ checksum ".circleci/config.yml" }}-{{ checksum "ver.txt" }}-{{ checksum "requires-dev.txt" }}-{{ checksum "requires-install.txt" }}-{{ checksum "requires-testing.txt" }}
+          paths:
+              - venv
+
+  restore_cache_cmd:
+    steps:
+      - restore_cache:
+          key: dep-{{ checksum ".circleci/config.yml" }}-{{ checksum "ver.txt" }}-{{ checksum "requires-dev.txt" }}-{{ checksum "requires-install.txt" }}-{{ checksum "requires-testing.txt" }}
+
+  requires_install_remove_dash_cmd:
+    steps:
+      - run:
+          name: remove dash from requires-install.txt
+          command: sed -i 's/^dash/#dash/' requires-install.txt
+
+  requires_install_restore_dash_cmd:
+    steps:
+      - run:
+          name: restore dash to requires-install.txt
+          command: sed -i 's/^#dash/dash/' requires-install.txt
+
+  build_core_dev_requirements_cmd:
+    steps:
+      - requires_install_remove_dash_cmd
+      - run:
+          name: ️️🏗️ build core dev requirements
+          command: |
+            python -m venv venv && source venv/bin/activate
+            pip install -e . --no-cache-dir -r requires-install.txt -r requires-dev.txt -r requires-testing.txt --progress-bar off
+
+            # dash-renderer needs to be installed in the venv in order to run the `renderer` tool
+            cd dash-renderer && npm ci && pip install -e . --no-cache-dir --progress-bar off && cd ..
+      - requires_install_restore_dash_cmd
+
+  install_built_packages_cmd:
+    steps:
+      - run:
+          name: ️️🏗️  Install built packages
+          command: |
+            rm -rf venv && python -m venv venv && source venv/bin/activate
+            npm install --production
+            cd packages && ls -la
+
+            # Install all except dash proper
+            find . -type f \( -name "dash*.gz" ! -name "dash?[0-9]*.gz" \) | xargs pip install --no-cache-dir --ignore-installed --progress-bar off
+
+            # Install dash package only to test if it installs...
+            find . -name "dash*.gz" | xargs pip install --no-cache-dir --progress-bar off && cd ..
+
+            # ...because for testing we need to install in editable mode from the source directory,
+            # which uninstalls the sdist. Among other things, this adds the current working
+            # directory to sys.path, which is needed for some unit tests
+            pip install -e . --no-cache-dir -r requires-install.txt -r requires-dev.txt -r requires-testing.txt --progress-bar off
+            pip list | grep dash
+
+
 jobs:
   percy-finalize:
     docker:
       - image: percyio/agent
     steps:
       - run: percy finalize --all
+
 
   artifacts:
     docker:
@@ -16,115 +75,46 @@ jobs:
     steps:
       - checkout
       - run: echo $PYVERSION > ver.txt
-      - restore_cache:
-          key: dep-{{ checksum ".circleci/config.yml" }}-{{ checksum "ver.txt" }}-{{ checksum "requires-dev.txt" }}-{{ checksum "requires-install.txt" }}-{{ checksum "requires-testing.txt" }}
       - attach_workspace:
           at: ~/dash
+      - run: cd ~/dash/packages && tar cvf dash-packages.tar *tar.gz && cd ~
       - store_artifacts:
           path: ~/dash/packages
           destination: /tmp/packages
 
-  lint-unit-37: &lint-unit
-    working_directory: ~/dash
-    docker:
-      - image: circleci/python:3.7.6-stretch-node-browsers
-        environment:
-          PYLINTRC: .pylintrc37
-          PYVERSION: python37
-
-    steps:
-      - checkout
-      - run: echo $PYVERSION > ver.txt
-      - restore_cache:
-          key: dep-{{ checksum ".circleci/config.yml" }}-{{ checksum "ver.txt" }}-{{ checksum "requires-dev.txt" }}-{{ checksum "requires-install.txt" }}-{{ checksum "requires-testing.txt" }}
-      - run:
-          name: ️️🏗️ pip dev requirements
-          command: |
-            sudo pip install --upgrade virtualenv --progress-bar off
-            python -m venv venv || virtualenv venv && . venv/bin/activate
-            pip install -e . --no-cache-dir -r requires-install.txt -r requires-dev.txt -r requires-testing.txt --progress-bar off
-      - save_cache:
-          key: dep-{{ checksum ".circleci/config.yml" }}-{{ checksum "ver.txt" }}-{{ checksum "requires-dev.txt" }}-{{ checksum "requires-install.txt" }}-{{ checksum "requires-testing.txt" }}
-          paths:
-              - venv
-      - run:
-          name: 🌸 Python & JS Lint
-          command: |
-            . venv/bin/activate
-            set -eo pipefail
-            pip install -e . --progress-bar off && pip list | grep dash
-            npm install --production && npm run initialize
-            npm run lint
-      - run:
-          name: 🐍 Python Unit Tests & ☕ JS Unit Tests
-          command: |
-            . venv/bin/activate
-            npm run citest.unit
-
-  lint-unit-36:
-      <<: *lint-unit
-      docker:
-        - image: circleci/python:3.6.9-stretch-node-browsers
-          environment:
-            PYLINTRC: .pylintrc
-            PYVERSION: python36
-
-  lint-unit-27:
-      <<: *lint-unit
-      docker:
-        - image: circleci/python:2.7.18-stretch-node-browsers
-          environment:
-            PYLINTRC: .pylintrc
-            PYVERSION: python27
 
   build-core-37: &build-core
     working_directory: ~/dash
     docker:
       - image: circleci/python:3.7.6-stretch-node-browsers
         environment:
+          PYLINTRC: .pylintrc37
           PYVERSION: python37
     steps:
       - checkout
       - run: echo $PYVERSION > ver.txt
-      - restore_cache:
-          key: dep-{{ checksum ".circleci/config.yml" }}-{{ checksum "ver.txt" }}-{{ checksum "requires-dev.txt" }}-{{ checksum "requires-install.txt" }}-{{ checksum "requires-testing.txt" }}
+      - restore_cache_cmd
+      - build_core_dev_requirements_cmd
+      - requires_install_remove_dash_cmd
       - run:
-          name: ️️🏗️ pip dev requirements
+          name: ️️🏗️ build core dash-renderer
           command: |
-            sudo pip install --upgrade virtualenv
-            python -m venv venv || virtualenv venv && . venv/bin/activate
-            sed -i '/dash-/d' requires-install.txt
-            pip install -e . --no-cache-dir -r requires-install.txt -r requires-dev.txt -r requires-testing.txt --progress-bar off
-      - save_cache:
-          key: dep-{{ checksum ".circleci/config.yml" }}-{{ checksum "ver.txt" }}-{{ checksum "requires-dev.txt" }}-{{ checksum "requires-install.txt" }}-{{ checksum "requires-testing.txt" }}
-          paths:
-              - venv
-      - run:
-          name: ️️🏗️ build core
-          command: |
-              . venv/bin/activate && pip install --no-cache-dir --upgrade -e . --progress-bar off && mkdir packages
+              source venv/bin/activate && pip install --no-cache-dir --upgrade -e . --progress-bar off && mkdir packages
               cd dash-renderer && renderer build && python setup.py sdist && mv dist/* ../packages/ && cd ..
-              git clone --depth 1 https://github.com/plotly/dash-core-components.git
-              cd dash-core-components && npm ci && npm run build && python setup.py sdist && mv dist/* ../packages/  && cd ..
               ls -la packages
+      - requires_install_restore_dash_cmd
+      - run:
+          name: ️️🏗️ build core dash
+          command: |
+              source venv/bin/activate
+              python setup.py sdist && mv dist/* packages/
+              ls -la packages
+      - save_cache_cmd
       - persist_to_workspace:
           root: ~/dash
           paths:
             - packages/*.tar.gz
 
-  build-core-36:
-      <<: *build-core
-      docker:
-        - image: circleci/python:3.6.9-stretch-node-browsers
-          environment:
-            PYVERSION: python36
-
-  build-core-27:
-      <<: *build-core
-      docker:
-        - image: circleci/python:2.7.18-stretch-node-browsers
-          environment:
-            PYVERSION: python27
 
   build-misc-37: &build-misc
     working_directory: ~/dash
@@ -132,191 +122,65 @@ jobs:
       - image: circleci/python:3.7.6-stretch-node-browsers
         environment:
           PYVERSION: python37
-
     steps:
       - checkout
       - run: echo $PYVERSION > ver.txt
-      - restore_cache:
-          key: dep-{{ checksum ".circleci/config.yml" }}-{{ checksum "ver.txt" }}-{{ checksum "requires-dev.txt" }}-{{ checksum "requires-install.txt" }}-{{ checksum "requires-testing.txt" }}
-      - run:
-          name: ️️🏗️ pip dev requirements
-          command: |
-            sudo pip install --upgrade virtualenv --quiet
-            python -m venv venv || virtualenv venv && . venv/bin/activate
-            pip install -e . --no-cache-dir -r requires-install.txt -r requires-dev.txt -r requires-testing.txt --progress-bar off
-      - save_cache:
-          key: dep-{{ checksum ".circleci/config.yml" }}-{{ checksum "ver.txt" }}-{{ checksum "requires-dev.txt" }}-{{ checksum "requires-install.txt" }}-{{ checksum "requires-testing.txt" }}
-          paths:
-              - venv
+      - restore_cache_cmd
+      - requires_install_remove_dash_cmd
       - run:
           name: ️️🏗️ build misc
           command: |
-              . venv/bin/activate && pip install --no-cache-dir --upgrade -e . --progress-bar off && mkdir packages
-              git clone --depth 1 https://github.com/plotly/dash-table.git
-              cd dash-table && npm ci && npm run build && python setup.py sdist && mv dist/* ../packages/ && cd ..
+              source venv/bin/activate && pip install --no-cache-dir --upgrade -e . --progress-bar off && mkdir packages
+
+              git clone https://github.com/plotly/dash-core-components.git
+              cd dash-core-components && git checkout v1.10.2
+              sed -i -e '3s/1\.10\.2/1.10.3-a1/' {package.json,package-lock.json}
+              sed -i -e 's/\[\[ PYTHON_VERSION != '\''py27'\'' \]\]/\[ \\"\$PYTHON_VERSION\\" != \\"py27\\" \]/' package.json
+              npm ci && npm run build && python setup.py sdist && mv dist/* ../packages/  && cd ..
+
+              git clone https://github.com/plotly/dash-table.git
+              cd dash-table && git checkout v4.9.0
+              sed -i -e '3s/4\.9\.0/4.9.1-a1/' {package.json,package-lock.json}
+              sed -i -e 's/\(^.*_supportsCssVariables.*\)\.some-selector/\1color/' -e 's/\(^.*_activeEdge.*\)--accent/\1--active_edge/' src/core/environment/index.ts
+              npm ci && npm run build && python setup.py sdist && mv dist/* ../packages/ && cd ..
+
               git clone --depth 1 https://github.com/plotly/dash-html-components.git
               cd dash-html-components && npm ci && npm run build && python setup.py sdist && mv dist/* ../packages/ && cd ..
+
               ls -la packages
+      - requires_install_restore_dash_cmd
       - persist_to_workspace:
           root: ~/dash
           paths:
             - packages/*.tar.gz
 
-  build-misc-36:
-      <<: *build-misc
-      docker:
-        - image: circleci/python:3.6.9-stretch-node-browsers
-          environment:
-            PYVERSION: python36
 
-  build-misc-27:
-      <<: *build-misc
-      docker:
-        - image: circleci/python:2.7.18-stretch-node-browsers
-          environment:
-            PYVERSION: python27
-
-  build-windows-37: &build-windows
+  lint-unit-37: &lint-unit
     working_directory: ~/dash
-    executor:
-      name: win/default
-      shell: bash.exe
-    environment:
-      PYVERSION: python37
+    docker:
+      - image: circleci/python:3.7.6-stretch-node-browsers
+        environment:
+          PYVERSION: python37
     steps:
       - checkout
       - run: echo $PYVERSION > ver.txt
-      - restore_cache:
-          key: dep-{{ checksum ".circleci/config.yml" }}-{{ checksum "ver.txt" }}-{{ checksum "requires-dev.txt" }}-{{ checksum "requires-install.txt" }}-{{ checksum "requires-testing.txt" }}
+      - attach_workspace:
+          at: ~/dash
+      - install_built_packages_cmd
       - run:
-          name: ️️🏗️ pip dev requirements
+          name: 🌸 Python & JS Lint
           command: |
-            pip install --upgrade virtualenv
-            virtualenv venv
-            source venv/Scripts/activate
-            sed -i '/dash-/d' requires-install.txt
+            source venv/bin/activate
+            set -eo pipefail
+            pip list | grep dash
+            npm install --production && npm run initialize
+            npm run lint --force
+      - run:
+          name: 🐍 Python Unit Tests & ☕ JS Unit Tests
+          command: |
+            source venv/bin/activate
             pip install -e . --no-cache-dir -r requires-install.txt -r requires-dev.txt -r requires-testing.txt --progress-bar off
-      - save_cache:
-          key: dep-{{ checksum ".circleci/config.yml" }}-{{ checksum "ver.txt" }}-{{ checksum "requires-dev.txt" }}-{{ checksum "requires-install.txt" }}-{{ checksum "requires-testing.txt" }}
-          paths:
-              - venv
-      - run:
-          name: ️️🏗️ build core
-          command: |
-              source venv/Scripts/activate && pip install --no-cache-dir --upgrade -e . --progress-bar off && mkdir packages
-              cd dash-renderer && renderer build && python setup.py sdist && mv dist/* ../packages/ && cd ..
-              git clone --depth 1 https://github.com/plotly/dash-core-components.git
-              cd dash-core-components && npm ci && npm run build && python setup.py sdist && mv dist/* ../packages/  && cd ..
-              ls -la packages
-      - persist_to_workspace:
-          root: ~/dash
-          paths:
-            - packages/*.tar.gz
-
-  build-dashr:
-    working_directory: ~/dashr
-    docker:
-      - image: plotly/dashr:ci
-        environment:
-          PERCY_PARALLEL_TOTAL: -1
-          PYVERSION: python37
-          _R_CHECK_FORCE_SUGGESTS_: FALSE
-
-    steps:
-      - checkout
-
-      - run:
-          name: ️️🏭 clone and npm build core for R
-          command: |
-            python -m venv venv
-            . venv/bin/activate
-            npm ci
-            pip install --no-cache-dir --upgrade -e .[dev,testing] --progress-bar off
-            git clone --depth 1 https://github.com/plotly/dashR.git -b dev dashR
-            git clone --depth 1 https://github.com/plotly/dash-html-components.git
-            git clone --depth 1 https://github.com/plotly/dash-core-components.git
-            git clone --depth 1 https://github.com/plotly/dash-table.git
-            shopt -s extglob
-            cd dash-html-components; npm ci && npm run build; rm -rf !(.|..|DESCRIPTION|LICENSE.txt|LICENSE|NAMESPACE|.Rbuildignore|R|man|inst|vignettes|build)
-            cd ../dash-core-components; npm ci && npm run build; rm -rf !(.|..|DESCRIPTION|LICENSE.txt|LICENSE|NAMESPACE|.Rbuildignore|R|man|inst|vignettes|build)
-            cd ../dash-table; npm ci && npm run build; rm -rf !(.|..|DESCRIPTION|LICENSE.txt|LICENSE|NAMESPACE|.Rbuildignore|R|man|inst|vignettes|build); cd ..
-
-      - run:
-          name: 🔧fix up dash metadata
-          command: |
-              sudo Rscript -e 'dash_desc <- read.dcf("dashR/DESCRIPTION"); dt_version <- read.dcf("dash-table/DESCRIPTION")[,"Version"]; dcc_version <- read.dcf("dash-core-components/DESCRIPTION")[,"Version"]; dhc_version <- read.dcf("dash-html-components/DESCRIPTION")[,"Version"]; imports <- dash_desc[,"Imports"][[1]]; imports <- gsub("((?<=dashHtmlComponents )(\\\\(.*?\\\\)))", paste0("(= ", dhc_version, ")"), imports, perl = TRUE); imports <- gsub("((?<=dashCoreComponents )(\\\\(.*?\\\\)))", paste0("(= ", dcc_version, ")"), imports, perl = TRUE); imports <- gsub("((?<=dashTable )(\\\\(.*?\\\\)))", paste0("(= ", dt_version, ")"), imports, perl = TRUE); dash_desc[,"Imports"][[1]] <- imports; dhc_hash <- system("cd dash-html-components; git rev-parse HEAD | tr -d '\''\n'\''", intern=TRUE); dcc_hash <- system("cd dash-core-components; git rev-parse HEAD | tr -d '\''\n'\''", intern=TRUE); dt_hash <- system("cd dash-table; git rev-parse HEAD | tr -d '\''\n'\''", intern=TRUE); remotes <- dash_desc[,"Remotes"][[1]];  remotes <- gsub("((?<=plotly\\\\/dash-html-components@)([a-zA-Z0-9]+))", dhc_hash, remotes, perl=TRUE); remotes <- gsub("((?<=plotly\\\\/dash-core-components@)([a-zA-Z0-9]+))", dcc_hash, remotes, perl=TRUE); remotes <- gsub("((?<=plotly\\\\/dash-table@)([a-zA-Z0-9]+))", dt_hash, remotes, perl=TRUE); dash_desc[,"Remotes"][[1]] <- remotes; write.dcf(dash_desc, "dashR/DESCRIPTION")'
-
-      - run:
-          name: 🎛 set environment variables
-          command: |
-            Rscript --vanilla \
-              -e 'dash_dsc <- read.dcf("dashR/DESCRIPTION")' \
-              -e 'cat(sprintf("export DASH_TARBALL=%s_%s.tar.gz\n", dash_dsc[,"Package"], dash_dsc[,"Version"]))' \
-              -e 'cat(sprintf("export DASH_CHECK_DIR=%s.Rcheck\n", dash_dsc[,"Package"]))' \
-              -e 'dhc_dsc <- read.dcf("dash-html-components/DESCRIPTION")' \
-              -e 'cat(sprintf("export DHC_TARBALL=%s_%s.tar.gz\n", dhc_dsc[,"Package"], dhc_dsc[,"Version"]))' \
-              -e 'cat(sprintf("export DHC_CHECK_DIR=%s.Rcheck\n", dhc_dsc[,"Package"]))' \
-              -e 'dcc_dsc <- read.dcf("dash-core-components/DESCRIPTION")' \
-              -e 'cat(sprintf("export DCC_TARBALL=%s_%s.tar.gz\n", dcc_dsc[,"Package"], dcc_dsc[,"Version"]))' \
-              -e 'cat(sprintf("export DCC_CHECK_DIR=%s.Rcheck\n", dcc_dsc[,"Package"]))' \
-              -e 'dt_dsc <- read.dcf("dash-table/DESCRIPTION")' \
-              -e 'cat(sprintf("export DT_TARBALL=%s_%s.tar.gz\n", dt_dsc[,"Package"], dt_dsc[,"Version"]))' \
-              -e 'cat(sprintf("export DT_CHECK_DIR=%s.Rcheck\n", dt_dsc[,"Package"]))' \
-              >> ${BASH_ENV}
-
-      - run:
-          name: ️️📋 run CRAN package checks
-          command: |
-            R CMD build dash-core-components
-            R CMD build dash-html-components
-            R CMD build dash-table
-            R CMD build dashR
-            sudo R CMD INSTALL dash-core-components
-            sudo R CMD INSTALL dash-html-components
-            sudo R CMD INSTALL dash-table
-            sudo R CMD INSTALL dashR
-            R CMD check "${DHC_TARBALL}" --as-cran --no-manual
-            R CMD check "${DCC_TARBALL}" --as-cran --no-manual
-            R CMD check "${DT_TARBALL}" --as-cran --no-manual
-            R CMD check "${DASH_TARBALL}" --as-cran --no-manual
-
-      - run:
-          name: 🕵 detect failures
-          command: |
-            Rscript -e "message(devtools::check_failures(path = '${DHC_CHECK_DIR}'))"
-            Rscript -e "message(devtools::check_failures(path = '${DCC_CHECK_DIR}'))"
-            Rscript -e "message(devtools::check_failures(path = '${DT_CHECK_DIR}'))"
-            Rscript -e "message(devtools::check_failures(path = '${DASH_CHECK_DIR}'))"
-            # warnings are errors; enable for stricter checks once CRAN submission finished
-            # if grep -q -R "WARNING" "${DHC_CHECK_DIR}/00check.log"; then exit 1; fi
-            # if grep -q -R "WARNING" "${DCC_CHECK_DIR}/00check.log"; then exit 1; fi
-            # if grep -q -R "WARNING" "${DT_CHECK_DIR}/00check.log"; then exit 1; fi
-            # if grep -q -R "WARNING" "${DASH_CHECK_DIR}/00check.log"; then exit 1; fi
-
-      - run:
-          name: 🔎 run unit tests
-          command: |
-              sudo Rscript -e 'res=devtools::test("dashR/tests/", reporter=default_reporter());df=as.data.frame(res);if(sum(df$failed) > 0 || any(df$error)) {q(status=1)}'
-
-      - run:
-          name: ⚙️ Integration tests
-          command: |
-            python -m venv venv
-            . venv/bin/activate
-            npm run setup-tests.R
-            export PATH=$PATH:/home/circleci/.local/bin/
-            pytest --nopercyfinalize --junitxml=test-reports/dashr.xml dashR/tests/integration/dopsa/
-      - store_artifacts:
-          path: test-reports
-      - store_test_results:
-          path: test-reports
-      - store_artifacts:
-          path: /tmp/dash_artifacts
-
-      - run:
-          name: 🦔 percy finalize
-          command: npx percy finalize --all
-          when: on_fail
+            npm run citest.unit
 
 
   test-37: &test
@@ -331,24 +195,15 @@ jobs:
     steps:
       - checkout
       - run: echo $PYVERSION > ver.txt
-      - restore_cache:
-          key: dep-{{ checksum ".circleci/config.yml" }}-{{ checksum "ver.txt" }}-{{ checksum "requires-dev.txt" }}-{{ checksum "requires-install.txt" }}-{{ checksum "requires-testing.txt" }}
       - attach_workspace:
           at: ~/dash
-      - run:
-          name: ️️🏗️  Install packages
-          command: |
-            . venv/bin/activate
-            npm install --production
-            cd packages && ls -la
-            find . -name "*.gz" | xargs pip install --no-cache-dir --ignore-installed && cd ..
-            sed -i '/dash/d' requires-install.txt
-            pip install --no-cache-dir --ignore-installed .
-            pip list | grep dash
+      - install_built_packages_cmd
       - run:
           name: 🧪 Run Integration Tests
           command: |
-            . venv/bin/activate
+            source venv/bin/activate
+            set -eo pipefail
+            pip install -e . --no-cache-dir -r requires-install.txt -r requires-dev.txt -r requires-testing.txt --progress-bar off
             npm run citest.integration
       - store_artifacts:
           path: test-reports
@@ -361,65 +216,98 @@ jobs:
           command: npx percy finalize --all
           when: on_fail
 
-  test-36:
-      <<: *test
-      docker:
-        - image: circleci/python:3.6.9-stretch-node-browsers
-          environment:
-            PERCY_ENABLE: 0
-            PYVERSION: python36
 
-  test-27:
-      <<: *test
-      docker:
-        - image: circleci/python:2.7.18-stretch-node-browsers
-          environment:
-            PERCY_ENABLE: 0
-            PYVERSION: python27
+  upload-37:
+    working_directory: ~
+    docker:
+      - image: circleci/python:3.7.6-stretch-node-browsers
+        environment:
+          PYVERSION: python37
+    steps:
+      - run: echo $PYVERSION > ver.txt
+      - attach_workspace:
+          at: ~/dash
+      - run:
+          name: Upload built packages to noisycomputation repo
+          command: |
+            echo "This is pipeline number << pipeline.number >>"
+            export REPO_URL="github.com/noisycomputation/noisycomputation.github.io.git"
+            git clone https://${REPO_URL}
+
+            python -m venv venv && source venv/bin/activate
+            pip install -U pip pkginfo
+
+            cd noisycomputation.github.io
+            python update_repo.py ~/dash/packages
+
+            git config user.email "noisycomputation@gmail.com"
+            git config user.name "noisycomputation"
+            commit_title="Repo update from dash CircleCI build no. << pipeline.number >>"
+            commit_desc="This job available at ${CIRCLE_BUILD_URL}"
+            git add . && git commit -m "${commit_title}" -m "${commit_desc}"
+
+            # redirect all output to null, else an error or update to git binary could
+            # expose token in public circleci logs.
+            git push -q https://${GITHUB_TOKEN}@${REPO_URL} master > /dev/null 2>&1
+
+            # but check whether git push suceeded or not
+            if [ $? -ne 0 ]; then
+                echo "git push FAILED"
+                exit 1
+            else
+                echo "git push SUCCEEDED"
+            fi
+
 
 workflows:
   version: 2
   python3.7:
     jobs:
-      - lint-unit-37
-      - build-core-37
-      - build-windows-37
-      - build-misc-37
-      - build-dashr
-      - test-37:
-          requires:
-            - build-core-37
-            - build-misc-37
-      - percy-finalize:
-          requires:
-            - build-dashr
-            - test-37
-      - artifacts:
-          requires:
-            - percy-finalize
+      - build-core-37:
           filters:
             branches:
               only:
-                - master
                 - dev
-            tags:
-              only: /v*/
-
-  python3.6:
-    jobs:
-      - lint-unit-36
-      - build-core-36
-      - build-misc-36
-      - test-36:
+      - build-misc-37:
           requires:
-            - build-core-36
-            - build-misc-36
-  python2.7:
-    jobs:
-      - lint-unit-27
-      - build-core-27
-      - build-misc-27
-      - test-27:
+            - build-core-37
+          filters:
+            branches:
+              only:
+                - dev
+      - lint-unit-37:
           requires:
-            - build-core-27
-            - build-misc-27
+            - build-misc-37
+          filters:
+            branches:
+              only:
+                - dev
+      - test-37:
+          requires:
+            - build-misc-37
+          filters:
+            branches:
+              only:
+                - dev
+      - percy-finalize:
+          requires:
+            - test-37
+          filters:
+            branches:
+              only:
+                - dev
+      - artifacts:
+          requires:
+            #- percy-finalize
+            - build-misc-37
+          filters:
+            branches:
+              only:
+                - dev
+      - upload-37:
+          requires:
+            - lint-unit-37
+          filters:
+            branches:
+              only:
+                - dev
